@@ -66,10 +66,12 @@ visualization_msgs::msg::MarkerArray GraspPlotter::convertToVisualGraspMsg(
     finger_lwh   << hand_depth_, finger_width_, hand_height_;
     approach_lwh << 0.08,        finger_width_, hand_height_;
 
-    auto base     = createHandBaseMarker(left_bottom, right_bottom, H.getFrame(), 0.02, hand_height_, i, frame_id);
-    auto left_f   = createFingerMarker(left_center,  H.getFrame(), finger_lwh,   i*3,   frame_id);
-    auto right_f  = createFingerMarker(right_center, H.getFrame(), finger_lwh,   i*3+1, frame_id);
-    auto approach = createFingerMarker(approach_center, H.getFrame(), approach_lwh, i*3+2, frame_id);
+    const int id_base = i * 4;
+    auto left_f   = createFingerMarker(left_center,  H.getFrame(), finger_lwh,     id_base + 0, frame_id);
+    auto right_f  = createFingerMarker(right_center, H.getFrame(), finger_lwh,     id_base + 1, frame_id);
+    auto approach = createFingerMarker(approach_center, H.getFrame(), approach_lwh,id_base + 2, frame_id);
+    auto base     = createHandBaseMarker(left_bottom, right_bottom, H.getFrame(),  0.02, hand_height_, id_base + 3, frame_id);
+
 
     marker_array.markers.push_back(left_f);
     marker_array.markers.push_back(right_f);

@@ -88,6 +88,19 @@ add_executable(detect_grasps_server
 
 add_executable(pcd_publisher src/tools/pcd_publisher.cpp)
 
+add_executable(pcd_service_client src/tools/pcd_service_client.cpp)
+ament_target_dependencies(pcd_service_client
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  gpd_ros2_interfaces
+  pcl_conversions
+  PCL
+)
+install(TARGETS pcd_service_client
+  DESTINATION lib/${PROJECT_NAME})
+
+
 # Include dirs for targets
 target_include_directories(${PROJECT_NAME}_grasp_messages PUBLIC include)
 target_include_directories(${PROJECT_NAME}_grasp_plotter PUBLIC include)
