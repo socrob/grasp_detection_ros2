@@ -4,6 +4,8 @@ colcon build --packages-select gpd_ros2 --cmake-args -DCMAKE_BUILD_TYPE=RelWithD
 GRASP DETECTION TEST
 ./src/grasp_detection_ros2/gpd_ros2/launch/grasp_detection.sh
 
+./src/grasp_detection_ros2/gpd_ros2/launch/grasp_detection.sh --use-asan --auto-restart --max-restarts 5
+
 ./src/grasp_detection_ros2/gpd_ros2/launch/run_pcd_publisher.sh
 
 

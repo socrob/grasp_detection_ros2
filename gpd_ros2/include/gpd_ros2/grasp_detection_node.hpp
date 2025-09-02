@@ -5,11 +5,10 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <ctime>
+#include <deque>
 #include <mutex>
 #include <atomic>
-#include <utility>
-#include <deque>
+#include <ctime>
 
 // Eigen
 #include <Eigen/Core>
@@ -47,20 +46,9 @@ using PointCloudPointNormal = pcl::PointCloud<pcl::PointNormal>;
 
 class GraspDetectionNode : public rclcpp::Node {
 public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
   GraspDetectionNode();
-  ~GraspDetectionNode() override {
-    // No manual delete needed - unique_ptr handles it automatically
-    // cloud_camera_ is just a non-owning pointer now
-  }
 
-  // Non-copyable (raw pointer member)
-  GraspDetectionNode(const GraspDetectionNode&) = delete;
-  GraspDetectionNode& operator=(const GraspDetectionNode&) = delete;
-
-  // spins the node (ROS1-style)
-  void run();
+  void run();  // spins the node (matches ROS1 style)
 
   // Detect grasp poses in the current cloud
   std::vector<std::unique_ptr<gpd::candidate::Hand>> detectGraspPoses();
@@ -75,8 +63,8 @@ private:
   void cloudIndexedCallback(const gpd_ros2_interfaces::msg::CloudIndexed::SharedPtr msg);
   void cloudSamplesCallback(const gpd_ros2_interfaces::msg::CloudSamples::SharedPtr msg);
   void samplesCallback(const gpd_ros2_interfaces::msg::SamplesMsg::SharedPtr msg);
-  
-  // Helper function to create Cloud from CloudSources
+
+  // Build a gpd::util::Cloud from our CloudSources wrapper
   std::unique_ptr<gpd::util::Cloud> createCloudFromSources(const gpd_ros2_interfaces::msg::CloudSources& msg);
 
   void timerTick();  // replaces ros::Rate loop
@@ -84,24 +72,24 @@ private:
   // params / state
   Eigen::Vector3d view_point_{0.0, 0.0, 0.0};
 
+  // Header of the currently processed/last published cloud
   std_msgs::msg::Header cloud_camera_header_;
-  // FIXED: Use smart pointer for proper memory management
+
+  // Active cloud ownership pointer and raw convenience alias (used by existing code paths)
   std::unique_ptr<gpd::util::Cloud> cloud_camera_unique_;
-  // Keep raw pointer for compatibility with existing detectGraspPoses method
   gpd::util::Cloud* cloud_camera_ = nullptr;
 
-  // FIXED: Member variables for pending cloud (no global staging)
+  // Queue/history to keep clouds alive (shared ownership) to avoid premature deletion while other subsystems may still hold references.
+  static constexpr std::size_t MAX_CLOUD_HISTORY = 3;
+  std::deque<std::shared_ptr<gpd::util::Cloud>> cloud_history_;
+
+  // Hand-off buffer between callbacks and processing tick
   std::unique_ptr<gpd::util::Cloud> pending_cloud_;
   std_msgs::msg::Header pending_header_;
-  std::mutex cloud_mutex_; // Thread safety for cloud operations
-  
-  // CRITICAL FIX: Flag to prevent processing while detection is running
+
+  // Concurrency guards
   std::atomic<bool> is_processing_{false};
-  
-  // CRITICAL FIX: Keep a history of clouds to prevent premature deletion
-  // GPD may keep internal references beyond the detection phase
-  std::deque<std::unique_ptr<gpd::util::Cloud>> cloud_history_;
-  static constexpr size_t MAX_CLOUD_HISTORY = 10;  // Increased from 3
+  std::mutex cloud_mutex_;
 
   std::unique_ptr<gpd::GraspDetector> grasp_detector_;
   std::unique_ptr<gpd_ros2::GraspPlotter> rviz_plotter_;

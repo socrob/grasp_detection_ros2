@@ -339,15 +339,20 @@ void GraspDetectionNode::timerTick()
   
   // CRITICAL FIX: Keep a history of clouds to prevent premature deletion
   // Move current cloud to history before replacing it
+  // ERROR HERE
   if (cloud_camera_unique_) {
-    cloud_history_.push_back(std::move(cloud_camera_unique_));
+    // Transfer ownership from unique_ptr -> shared_ptr so the object stays alive
+    auto keep = std::shared_ptr<gpd::util::Cloud>(std::move(cloud_camera_unique_));
     
-    // Keep only the last few clouds in history
+    // Keep a non-owning raw pointer for convenience.
+    // This remains valid as long as `keep` (now in history) stays alive.
+    cloud_camera_ = keep.get();
+    
+    // Retain a few recent clouds to guarantee lifetime across callbacks.
+    cloud_history_.push_back(std::move(keep));
     while (cloud_history_.size() > MAX_CLOUD_HISTORY) {
       cloud_history_.pop_front();
     }
-    
-    cloud_camera_ = nullptr;
   }
   
   // Now safely set the new cloud
