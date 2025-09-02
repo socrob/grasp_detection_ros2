@@ -5,6 +5,7 @@
 #include <vector>
 #include <cctype>
 #include <cstdint>
+#include <iomanip>
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -37,6 +38,10 @@ public:
     view_px_      = this->declare_parameter<double>("view_point_x", 0.0);
     view_py_      = this->declare_parameter<double>("view_point_y", 0.0);
     view_pz_      = this->declare_parameter<double>("view_point_z", 0.0);
+    
+    // NEW: Control how many grasps to show in detail
+    show_detailed_ = this->declare_parameter<int>("show_detailed", 3);
+    show_summary_  = this->declare_parameter<bool>("show_summary", true);
 
     if (pcd_file_.empty()) {
       RCLCPP_FATAL(get_logger(), "Parameter 'pcd_file' is empty.");
@@ -123,14 +128,151 @@ private:
 
   void handleResponse(const std::shared_ptr<Detect::Response>& res) {
     const auto& list = res->grasp_configs;
+    
     RCLCPP_INFO(this->get_logger(),
-                "Service responded with %zu grasps in frame '%s'.",
+                "\n========== GRASP DETECTION RESULTS ==========");
+    RCLCPP_INFO(this->get_logger(),
+                "Detected %zu grasps in frame '%s'",
                 list.grasps.size(),
                 list.header.frame_id.c_str());
-    const size_t show = std::min<size_t>(list.grasps.size(), 5);
-    for (size_t i = 0; i < show; ++i) {
-      RCLCPP_INFO(this->get_logger(), "  grasp[%zu] score = %.3f", i, list.grasps[i].score);
+    
+    if (list.grasps.empty()) {
+      RCLCPP_WARN(this->get_logger(), "No grasps detected!");
+      return;
     }
+
+    // Show summary statistics
+    if (show_summary_) {
+      printSummary(list);
+    }
+
+    // Show detailed information for top grasps
+    const size_t show_detailed = std::min<size_t>(
+      static_cast<size_t>(show_detailed_), 
+      list.grasps.size()
+    );
+    
+    if (show_detailed > 0) {
+      RCLCPP_INFO(this->get_logger(),
+                  "\n--- TOP %zu GRASP DETAILS ---", show_detailed);
+      
+      for (size_t i = 0; i < show_detailed; ++i) {
+        printGraspDetails(list.grasps[i], i + 1);
+      }
+    }
+
+    RCLCPP_INFO(this->get_logger(), 
+                "============================================\n");
+  }
+
+  void printSummary(const gpd_ros2_interfaces::msg::GraspConfigList& list) {
+    // Calculate statistics
+    float min_score = std::numeric_limits<float>::max();
+    float max_score = std::numeric_limits<float>::lowest();
+    float avg_score = 0.0f;
+    
+    for (const auto& grasp : list.grasps) {
+      min_score = std::min(min_score, grasp.score);
+      max_score = std::max(max_score, grasp.score);
+      avg_score += grasp.score;
+    }
+    avg_score /= static_cast<float>(list.grasps.size());
+
+    RCLCPP_INFO(this->get_logger(),
+                "\n--- SUMMARY STATISTICS ---");
+    RCLCPP_INFO(this->get_logger(),
+                "Score range: %.4f to %.4f (avg: %.4f)",
+                min_score, max_score, avg_score);
+    
+    // Count grasps by score ranges
+    size_t excellent = 0, good = 0, fair = 0, poor = 0;
+    for (const auto& grasp : list.grasps) {
+      if (grasp.score >= 0.8) excellent++;
+      else if (grasp.score >= 0.6) good++;
+      else if (grasp.score >= 0.4) fair++;
+      else poor++;
+    }
+    
+    RCLCPP_INFO(this->get_logger(),
+                "Quality distribution: %zu excellent (≥0.8), %zu good (≥0.6), %zu fair (≥0.4), %zu poor (<0.4)",
+                excellent, good, fair, poor);
+  }
+
+  void printGraspDetails(const gpd_ros2_interfaces::msg::GraspConfig& grasp, size_t rank) {
+    const auto& pos = grasp.position;
+    const auto& approach = grasp.approach;
+    const auto& binormal = grasp.binormal;
+    const auto& axis = grasp.axis;
+
+    RCLCPP_INFO(this->get_logger(),
+                "\n  GRASP #%zu (Score: %.4f):", rank, grasp.score);
+    
+    // Position
+    RCLCPP_INFO(this->get_logger(),
+                "    Position:    [%7.4f, %7.4f, %7.4f]",
+                pos.x, pos.y, pos.z);
+    
+    // Direction vectors (R = [approach binormal axis])
+    RCLCPP_INFO(this->get_logger(),
+                "    Approach:    [%7.4f, %7.4f, %7.4f]",
+                approach.x, approach.y, approach.z);
+    
+    RCLCPP_INFO(this->get_logger(),
+                "    Binormal:    [%7.4f, %7.4f, %7.4f]",
+                binormal.x, binormal.y, binormal.z);
+    
+    RCLCPP_INFO(this->get_logger(),
+                "    Axis:        [%7.4f, %7.4f, %7.4f]",
+                axis.x, axis.y, axis.z);
+    
+    // Grasp width and sample point
+    RCLCPP_INFO(this->get_logger(),
+                "    Width:       %.4f m", grasp.width);
+    
+    RCLCPP_INFO(this->get_logger(),
+                "    Sample:      [%7.4f, %7.4f, %7.4f]", 
+                grasp.sample.x, grasp.sample.y, grasp.sample.z);
+
+    // Calculate and show derived information
+    printDerivedInfo(grasp);
+  }
+
+  void printDerivedInfo(const gpd_ros2_interfaces::msg::GraspConfig& grasp) {
+    const auto& pos = grasp.position;
+    const auto& approach = grasp.approach;
+    const auto& binormal = grasp.binormal;
+    const auto& axis = grasp.axis;
+    
+    // Distance from origin
+    double distance = std::sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+    RCLCPP_INFO(this->get_logger(),
+                "    Distance from origin: %.4f m", distance);
+    
+    // Calculate approach angle relative to vertical (z-axis)
+    double approach_length = std::sqrt(approach.x * approach.x + approach.y * approach.y + approach.z * approach.z);
+    if (approach_length > 0.001) {  // Avoid division by zero
+      double approach_angle = std::acos(std::abs(approach.z) / approach_length) * 180.0 / M_PI;
+      RCLCPP_INFO(this->get_logger(),
+                  "    Approach angle from vertical: %.2f°", approach_angle);
+    }
+    
+    // Calculate if the grasp vectors are orthonormal (they should be)
+    double approach_mag = std::sqrt(approach.x * approach.x + approach.y * approach.y + approach.z * approach.z);
+    double binormal_mag = std::sqrt(binormal.x * binormal.x + binormal.y * binormal.y + binormal.z * binormal.z);
+    double axis_mag = std::sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
+    
+    RCLCPP_INFO(this->get_logger(),
+                "    Vector magnitudes: approach=%.4f, binormal=%.4f, axis=%.4f",
+                approach_mag, binormal_mag, axis_mag);
+    
+    // Calculate dot products to check orthogonality
+    double dot_ab = approach.x * binormal.x + approach.y * binormal.y + approach.z * binormal.z;
+    double dot_aa = approach.x * axis.x + approach.y * axis.y + approach.z * axis.z;
+    double dot_ba = binormal.x * axis.x + binormal.y * axis.y + binormal.z * axis.z;
+    
+    RCLCPP_INFO(this->get_logger(),
+                "    Orthogonality check: app·bin=%.4f, app·axis=%.4f, bin·axis=%.4f (should be ~0)",
+                dot_ab, dot_aa, dot_ba);
   }
 
   static std::vector<int64_t> makeStrideIndices(size_t total, size_t target) {
@@ -187,6 +329,10 @@ private:
   int period_ms_{1000};
   int num_indices_{500};
   double view_px_{0.0}, view_py_{0.0}, view_pz_{0.0};
+  
+  // NEW: Display control parameters
+  int show_detailed_{3};   // How many grasps to show in detail
+  bool show_summary_{true}; // Whether to show summary statistics
 
   // cached data
   sensor_msgs::msg::PointCloud2 cloud_msg_;

@@ -5,6 +5,10 @@ namespace gpd_ros2 {
 GraspDetectionServer::GraspDetectionServer()
 : rclcpp::Node("detect_grasps_server")
 {
+  // Initialize cloud pointers
+  cloud_camera_unique_ = nullptr;
+  cloud_camera_ = nullptr;
+
   // Declare & get parameters (mirrors ROS1)
   auto cfg_file = this->declare_parameter<std::string>("config_file", "");
   auto rviz_topic = this->declare_parameter<std::string>("rviz_topic", "");
@@ -47,7 +51,7 @@ void GraspDetectionServer::handle_detect_grasps(
 {
   RCLCPP_INFO(this->get_logger(), "Received service request ...");
 
-  // 1) Initialize Cloud
+  // 1) Initialize Cloud with memory management
   initCloudCamera(req->cloud_indexed.cloud_sources, req->cloud_indexed.cloud_sources.cloud.header);
   frame_ = req->cloud_indexed.cloud_sources.cloud.header.frame_id;
 
@@ -87,8 +91,24 @@ void GraspDetectionServer::initCloudCamera(
   const gpd_ros2_interfaces::msg::CloudSources& msg,
   const std_msgs::msg::Header& header)
 {
-  cloud_camera_.reset();
   cloud_camera_header_ = header;
+
+  // CRITICAL FIX: Keep a history of clouds to prevent premature deletion
+  // Move current cloud to history before replacing it
+  if (cloud_camera_unique_) {
+    // Transfer ownership from unique_ptr -> shared_ptr so the object stays alive
+    auto keep = std::shared_ptr<gpd::util::Cloud>(std::move(cloud_camera_unique_));
+    
+    // Keep a non-owning raw pointer for convenience.
+    // This remains valid as long as `keep` (now in history) stays alive.
+    cloud_camera_ = keep.get();
+    
+    // Retain a few recent clouds to guarantee lifetime across service calls.
+    cloud_history_.push_back(std::move(keep));
+    while (cloud_history_.size() > MAX_CLOUD_HISTORY) {
+      cloud_history_.pop_front();
+    }
+  }
 
   // View points
   Eigen::Matrix3Xd view_points(3, msg.view_points.size());
@@ -103,11 +123,17 @@ void GraspDetectionServer::initCloudCamera(
       (msg.cloud.fields[4].name == "normal_y") &&
       (msg.cloud.fields[5].name == "normal_z");
 
+  std::unique_ptr<gpd::util::Cloud> new_cloud;
+
   if (has_normals) {
     auto cloud = std::make_shared<PointCloudPointNormal>();
     pcl::fromROSMsg(msg.cloud, *cloud);
 
-    Eigen::MatrixXi camera_source = Eigen::MatrixXi::Zero(view_points.cols(), static_cast<int>(cloud->size()));
+    // Create a completely new copy of the cloud to avoid sharing
+    auto cloud_copy = std::make_shared<PointCloudPointNormal>();
+    pcl::copyPointCloud(*cloud, *cloud_copy);
+
+    Eigen::MatrixXi camera_source = Eigen::MatrixXi::Zero(view_points.cols(), static_cast<int>(cloud_copy->size()));
     for (size_t i = 0; i < msg.camera_source.size(); ++i) {
       const int cam_idx = static_cast<int>(msg.camera_source[i]);
       if (cam_idx >= 0 && cam_idx < camera_source.rows() && static_cast<int>(i) < camera_source.cols()) {
@@ -115,12 +141,16 @@ void GraspDetectionServer::initCloudCamera(
       }
     }
 
-    cloud_camera_ = std::make_unique<gpd::util::Cloud>(cloud, camera_source, view_points);
+    new_cloud = std::make_unique<gpd::util::Cloud>(cloud_copy, camera_source, view_points);
   } else {
     auto cloud = std::make_shared<PointCloudRGBA>();
     pcl::fromROSMsg(msg.cloud, *cloud);
 
-    Eigen::MatrixXi camera_source = Eigen::MatrixXi::Zero(view_points.cols(), static_cast<int>(cloud->size()));
+    // Create a completely new copy of the cloud to avoid sharing
+    auto cloud_copy = std::make_shared<PointCloudRGBA>();
+    pcl::copyPointCloud(*cloud, *cloud_copy);
+
+    Eigen::MatrixXi camera_source = Eigen::MatrixXi::Zero(view_points.cols(), static_cast<int>(cloud_copy->size()));
     for (size_t i = 0; i < msg.camera_source.size(); ++i) {
       const int cam_idx = static_cast<int>(msg.camera_source[i]);
       if (cam_idx >= 0 && cam_idx < camera_source.rows() && static_cast<int>(i) < camera_source.cols()) {
@@ -128,8 +158,12 @@ void GraspDetectionServer::initCloudCamera(
       }
     }
 
-    cloud_camera_ = std::make_unique<gpd::util::Cloud>(cloud, camera_source, view_points);
+    new_cloud = std::make_unique<gpd::util::Cloud>(cloud_copy, camera_source, view_points);
   }
+
+  // Now safely set the new cloud
+  cloud_camera_unique_ = std::move(new_cloud);
+  cloud_camera_ = cloud_camera_unique_.get();
 }
 
 } // namespace gpd_ros2

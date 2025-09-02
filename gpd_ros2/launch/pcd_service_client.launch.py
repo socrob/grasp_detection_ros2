@@ -19,6 +19,12 @@ def generate_launch_description():
         DeclareLaunchArgument('view_point_x', default_value='0.0'),
         DeclareLaunchArgument('view_point_y', default_value='0.0'),
         DeclareLaunchArgument('view_point_z', default_value='0.0'),
+
+        # NEW: Display control parameters
+        DeclareLaunchArgument('show_detailed', default_value='3', 
+                            description='Number of top grasps to show in detail'),
+        DeclareLaunchArgument('show_summary', default_value='true',
+                            description='Whether to show summary statistics'),
     ]
 
     # Use typed ParameterValue to avoid "stringy" params
@@ -32,6 +38,8 @@ def generate_launch_description():
         'view_point_x': ParameterValue(LaunchConfiguration('view_point_x'), value_type=float),
         'view_point_y': ParameterValue(LaunchConfiguration('view_point_y'), value_type=float),
         'view_point_z': ParameterValue(LaunchConfiguration('view_point_z'), value_type=float),
+        'show_detailed': ParameterValue(LaunchConfiguration('show_detailed'), value_type=int),
+        'show_summary': ParameterValue(LaunchConfiguration('show_summary'), value_type=bool),
     }
 
     node = Node(

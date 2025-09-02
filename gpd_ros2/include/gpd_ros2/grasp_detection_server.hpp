@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <deque>
+#include <ctime>
 #include <Eigen/Core>
 
 #include <rclcpp/rclcpp.hpp>
@@ -53,7 +55,15 @@ private:
   std_msgs::msg::Header cloud_camera_header_;
   std::string frame_;
   std::unique_ptr<gpd::GraspDetector> grasp_detector_;
-  std::unique_ptr<gpd::util::Cloud> cloud_camera_;
+  
+  // Active cloud ownership pointer and raw convenience alias
+  std::unique_ptr<gpd::util::Cloud> cloud_camera_unique_;
+  gpd::util::Cloud* cloud_camera_ = nullptr;
+  
+  // Queue/history to keep clouds alive (shared ownership) to avoid premature deletion while other subsystems may still hold references.
+  static constexpr std::size_t MAX_CLOUD_HISTORY = 3;
+  std::deque<std::shared_ptr<gpd::util::Cloud>> cloud_history_;
+  
   std::unique_ptr<gpd_ros2::GraspPlotter> rviz_plotter_;
   bool use_rviz_{false};
   std::vector<double> workspace_;
