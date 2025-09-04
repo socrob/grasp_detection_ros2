@@ -100,6 +100,14 @@ ament_target_dependencies(pcd_service_client
 install(TARGETS pcd_service_client
   DESTINATION lib/${PROJECT_NAME})
 
+add_executable(mask2gpd src/tools/mask2gpd.cpp)
+ament_target_dependencies(mask2gpd
+  rclcpp
+  sensor_msgs
+)
+install(TARGETS mask2gpd
+  DESTINATION lib/${PROJECT_NAME})
+
 
 # Include dirs for targets
 target_include_directories(${PROJECT_NAME}_grasp_messages PUBLIC include)
