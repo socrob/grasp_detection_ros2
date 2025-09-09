@@ -396,7 +396,7 @@ ros2 run gpd_ros2 mask2gpd \
 **Typical Pipeline:**
 ```
 Camera → Segmentation → mask2gpd → GPD Detection
-         (mask2pcl)    (reformat)   (detect_grasps)
+             (SAM2)    (mask2pcl)   (detect_grasps)
 ```
 
 #### PCD Service Client (`pcd_service_client`)
