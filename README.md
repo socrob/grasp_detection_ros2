@@ -69,7 +69,7 @@ git clone <repository-url> grasp_detection_ros2
 
 # Build the workspace
 cd ~/grasp_ws
-colcon build --packages-select gpd_ros2_interfaces gpd_ros2
+colcon build --packages-select gpd_ros2_interfaces gpd_ros2 --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
 # Source the workspace
 source install/setup.bash
@@ -396,7 +396,7 @@ ros2 run gpd_ros2 mask2gpd \
 **Typical Pipeline:**
 ```
 Camera → Segmentation → mask2gpd → GPD Detection
-             (SAM2)    (mask2pcl)   (detect_grasps)
+        (SAM2, mask2pcl)  (pcl2gpd)   (detect_grasps)
 ```
 
 #### PCD Service Client (`pcd_service_client`)
@@ -489,14 +489,10 @@ The implementation includes temporary memory management solutions for GPD stabil
 - ASAN-compatible modes for memory debugging
 - Automatic restart capabilities for production use
 
-### Debug Mode
+### VSCode Debug Mode
 ```bash
 # Launch with debug options
-ros2 launch gpd_ros2 grasp_detection.launch.py use_asan:=true
-
-# Enable auto-restart for production
-./src/grasp_detection_ros2/gpd_ros2/launch/grasp_detection.sh \
-  --auto-restart --max-restarts 10
+ros2 launch gpd_ros2 grasp_detection_debug.launch.py debugger:=gdbserver gdb_port:=3333 cloud_type:=0 cloud_topic:=/cloud_stitched rviz_topic:="/grasp_poses"
 ```
 
 ### Performance Monitoring
