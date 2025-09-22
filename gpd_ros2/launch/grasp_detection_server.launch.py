@@ -10,7 +10,7 @@ def generate_launch_description():
     # Namespace argument
     namespace_arg = DeclareLaunchArgument(
         'namespace',
-        default_value='',
+        default_value='gpd',
         description='Namespace for the grasp detection server node'
     )
     
