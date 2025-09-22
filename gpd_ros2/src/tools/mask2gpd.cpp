@@ -11,8 +11,8 @@ public:
   ObjectCloudToGPD()
   : Node("object_cloud_to_gpd") {
     // Parameters
-    input_topic_  = declare_parameter<std::string>("input_topic", "object_cloud"); // from mask2pcl
-    output_topic_ = declare_parameter<std::string>("output_topic", "/cloud_stitched"); // GPD default
+    input_topic_  = declare_parameter<std::string>("input_topic", "/mask2pcl/object_cloud"); // from mask2pcl
+    output_topic_ = declare_parameter<std::string>("output_topic", "/gpd/input_cloud"); // GPD default
     frame_override_ = declare_parameter<std::string>("frame_override", ""); // empty -> keep incoming
     repeat_rate_hz_ = declare_parameter<double>("repeat_rate_hz", 0.0); // 0 -> no repeating
 
