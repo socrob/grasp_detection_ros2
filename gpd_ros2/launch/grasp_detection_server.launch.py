@@ -2,23 +2,31 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch.conditions import IfCondition, UnlessCondition
 
 
 def generate_launch_description():
+    # Namespace argument
+    namespace_arg = DeclareLaunchArgument(
+        'namespace',
+        default_value='',
+        description='Namespace for the grasp detection server node'
+    )
+    
     # Existing arguments
     config_file_arg = DeclareLaunchArgument(
         "config_file",
-        default_value="/home/socrob/Development/gpd/cfg/ros_eigen_params.cfg",
+        default_value="/home/socrob/grasp_ws/src/grasp_detection_ros2/gpd_ros2/config/ros_eigen_params.cfg",
         description="Path to GPD config (*.cfg)",
     )
     rviz_topic_arg = DeclareLaunchArgument(
         "rviz_topic",
-        default_value="/grasp_poses",
+        default_value="grasp_poses",
         description="Topic to publish RViz grasp markers",
     )
 
-    # NEW: ASAN options
+    # ASAN options
     use_asan = DeclareLaunchArgument(
         'use_asan', default_value='false',
         description='Enable ASAN workaround for GPD memory issues'
@@ -27,9 +35,6 @@ def generate_launch_description():
     params = {
         "config_file": LaunchConfiguration("config_file"),
         "rviz_topic":  LaunchConfiguration("rviz_topic"),
-        # The server declares these as well; leave to defaults unless you want to set:
-        # "workspace": [],                     # e.g. [-1,1,-1,1,-1,1]
-        # "camera_position": [0.0, 0.0, 0.0],  # optional
     }
 
     # Standard node (no ASAN)
@@ -37,6 +42,7 @@ def generate_launch_description():
         package="gpd_ros2",
         executable="detect_grasps_server",   
         name="detect_grasps_server",
+        namespace=LaunchConfiguration('namespace'),
         output="screen",
         parameters=[params],
         condition=UnlessCondition(LaunchConfiguration('use_asan'))
@@ -47,6 +53,7 @@ def generate_launch_description():
         package="gpd_ros2",
         executable="detect_grasps_server",
         name="detect_grasps_server",
+        namespace=LaunchConfiguration('namespace'),
         output="screen",
         parameters=[params],
         additional_env={
@@ -58,6 +65,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        namespace_arg,
         config_file_arg,
         rviz_topic_arg,
         use_asan,

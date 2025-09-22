@@ -2,14 +2,15 @@
 set -euo pipefail
 
 # ---- Configuration (can be overridden by env vars) ----
-CONFIG_FILE="${CONFIG_FILE:-/home/socrob/Development/gpd/cfg/ros_eigen_params.cfg}"
-RVIZ_TOPIC="${RVIZ_TOPIC:-/grasp_poses}"
+CONFIG_FILE="${CONFIG_FILE:-/home/socrob/grasp_ws/src/grasp_detection_ros2/gpd_ros2/config/ros_eigen_params.cfg}"
+RVIZ_TOPIC="${RVIZ_TOPIC:-grasp_poses}"
+NAMESPACE="${NAMESPACE:-gpd}"
 
-# NEW: ASAN and restart options
-USE_ASAN="${USE_ASAN:-false}"              # true/false
-AUTO_RESTART="${AUTO_RESTART:-false}"      # true/false  
-MAX_RESTARTS="${MAX_RESTARTS:-10}"         # number
-RESTART_DELAY="${RESTART_DELAY:-3}"        # seconds between restarts
+# ASAN and restart options
+USE_ASAN="${USE_ASAN:-false}"
+AUTO_RESTART="${AUTO_RESTART:-true}"
+MAX_RESTARTS="${MAX_RESTARTS:-10}"
+RESTART_DELAY="${RESTART_DELAY:-3}"
 
 # Ensure GPD runtime path if installed to /usr/local/lib
 export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH:-}"
@@ -20,6 +21,7 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Options:
+    --namespace NS      Set namespace for the grasp detection server node
     --use-asan          Enable ASAN workaround for GPD memory issues
     --auto-restart      Auto-restart node if it crashes
     --max-restarts N    Maximum restarts (default: 10)
@@ -29,27 +31,32 @@ Options:
     --help              Show this help
 
 Environment variables:
-    USE_ASAN, AUTO_RESTART, MAX_RESTARTS, RESTART_DELAY, 
+    NAMESPACE, USE_ASAN, AUTO_RESTART, MAX_RESTARTS, RESTART_DELAY, 
     CONFIG_FILE, RVIZ_TOPIC
 
 Examples:
     # Standard run
     $0
     
-    # With ASAN workaround
-    $0 --use-asan
+    # With namespace
+    $0 --namespace grasp_server
     
-    # With auto-restart (up to 5 times)
-    $0 --auto-restart --max-restarts 5
+    # With ASAN workaround and namespace
+    $0 --use-asan --namespace left_arm_grasp
     
-    # Both ASAN and auto-restart
-    $0 --use-asan --auto-restart
+    # Multi-arm setup
+    $0 --namespace left_arm --rviz-topic /left_arm/grasp_poses
+    $0 --namespace right_arm --rviz-topic /right_arm/grasp_poses
 EOF
 }
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --namespace)
+            NAMESPACE="$2"
+            shift 2
+            ;;
         --use-asan)
             USE_ASAN="true"
             shift
@@ -86,40 +93,56 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Function to run via launch file (for ASAN support)
+# Build launch arguments
+LAUNCH_ARGS=(
+    "config_file:=${CONFIG_FILE}"
+    "rviz_topic:=${RVIZ_TOPIC}"
+    "use_asan:=${USE_ASAN}"
+)
+
+# Add namespace if provided
+if [[ -n "${NAMESPACE}" ]]; then
+    LAUNCH_ARGS+=("namespace:=${NAMESPACE}")
+fi
+
+# Build ros2 run arguments for direct execution
+ROS_ARGS=(
+    "--ros-args"
+    "-p" "config_file:=${CONFIG_FILE}"
+    "-p" "rviz_topic:=${RVIZ_TOPIC}"
+)
+
+# Add namespace to ros2 run command if provided
+if [[ -n "${NAMESPACE}" ]]; then
+    ROS_ARGS+=("-r" "__ns:=/${NAMESPACE}")
+fi
+
+# Function to run via launch file
 run_with_launch() {
     local attempt=$1
     echo "===== Attempt $attempt: Starting GPD server via launch ====="
     
-    local launch_args=(
-        "config_file:=${CONFIG_FILE}"
-        "rviz_topic:=${RVIZ_TOPIC}"
-    )
-    
-    if [[ "${USE_ASAN}" == "true" ]]; then
-        echo "Using ASAN workaround for memory issues"
-        launch_args+=("use_asan:=true")
-    fi
-    
-    echo "Command: ros2 launch gpd_ros2 grasp_detection_server.launch.py ${launch_args[*]}"
-    ros2 launch gpd_ros2 grasp_detection_server.launch.py "${launch_args[@]}"
+    echo "Command: ros2 launch gpd_ros2 grasp_detection_server_namespace.launch.py ${LAUNCH_ARGS[*]}"
+    ros2 launch gpd_ros2 grasp_detection_server_namespace.launch.py "${LAUNCH_ARGS[@]}"
     
     return $?
 }
 
-# Function to run directly (for non-ASAN)
+# Function to run directly 
 run_direct() {
     local attempt=$1
     echo "===== Attempt $attempt: Starting GPD server directly ====="
     
-    local ros_args=(
-        "--ros-args"
-        "-p" "config_file:=${CONFIG_FILE}"
-        "-p" "rviz_topic:=${RVIZ_TOPIC}"
-    )
+    # Set ASAN environment if requested
+    if [[ "${USE_ASAN}" == "true" ]]; then
+        echo "Using ASAN workaround for memory issues"
+        export ASAN_OPTIONS="new_delete_type_mismatch=0:alloc_dealloc_mismatch=0:detect_leaks=0"
+        export MALLOC_CHECK_=0
+        export MALLOC_PERTURB_=0
+    fi
     
-    echo "Command: ros2 run gpd_ros2 detect_grasps_server ${ros_args[*]}"
-    ros2 run gpd_ros2 detect_grasps_server "${ros_args[@]}"
+    echo "Command: ros2 run gpd_ros2 detect_grasps_server ${ROS_ARGS[*]}"
+    ros2 run gpd_ros2 detect_grasps_server "${ROS_ARGS[@]}"
     
     return $?
 }
@@ -134,6 +157,25 @@ cleanup() {
 # Set up signal handlers
 trap cleanup SIGINT SIGTERM
 
+# Show configuration
+echo "==============================================="
+echo "GPD GRASP DETECTION SERVER LAUNCH"
+echo "==============================================="
+echo "Config file: $CONFIG_FILE"
+echo "RViz topic: $RVIZ_TOPIC"
+if [[ -n "${NAMESPACE}" ]]; then
+    echo "Namespace: $NAMESPACE"
+else
+    echo "Namespace: (none)"
+fi
+echo "ASAN workaround: $USE_ASAN"
+echo "Auto-restart: $AUTO_RESTART"
+if [[ "${AUTO_RESTART}" == "true" ]]; then
+    echo "Max restarts: $MAX_RESTARTS"
+    echo "Restart delay: ${RESTART_DELAY}s"
+fi
+echo "==============================================="
+
 # Main execution logic
 if [[ "${AUTO_RESTART}" == "true" ]]; then
     echo "Auto-restart enabled (max: $MAX_RESTARTS, delay: ${RESTART_DELAY}s)"
@@ -144,11 +186,13 @@ if [[ "${AUTO_RESTART}" == "true" ]]; then
     while [[ $restart_count -lt $MAX_RESTARTS ]]; do
         restart_count=$((restart_count + 1))
         
-        # Run the node (use launch for ASAN, direct for non-ASAN)
+        # Run the node
         set +e  # Don't exit on command failure
         if [[ "${USE_ASAN}" == "true" ]]; then
+            # Use launch file for ASAN support
             run_with_launch $restart_count
         else
+            # Use direct execution for simpler cases
             run_direct $restart_count
         fi
         exit_code=$?

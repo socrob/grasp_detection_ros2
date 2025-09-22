@@ -4,7 +4,7 @@ set -euo pipefail
 # ---- Configuration (can be overridden by env vars) ----
 PCD_FILE="${PCD_FILE:-$HOME/grasp_ws/src/grasp_detection_ros2/tutorials/krylon.pcd}"
 FRAME="${FRAME:-camera_link}"
-SERVICE_NAME="${SERVICE_NAME:-/detect_grasps}"
+SERVICE_NAME="${SERVICE_NAME:-/gpd/detect_grasps}"
 REPEAT="${REPEAT:-false}"
 NUM_INDICES="${NUM_INDICES:-500}"
 VIEW_POINT_X="${VIEW_POINT_X:-0.0}"

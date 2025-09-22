@@ -2,15 +2,16 @@
 set -euo pipefail
 
 # ---- Configuration (can be overridden by env vars) ----
-CONFIG_FILE="${CONFIG_FILE:-/home/socrob/Development/gpd/cfg/ros_eigen_params.cfg}"
+CONFIG_FILE="${CONFIG_FILE:-/home/socrob/grasp_ws/src/grasp_detection_ros2/gpd_ros2/config/ros_eigen_params.cfg}"
 CLOUD_TYPE="${CLOUD_TYPE:-0}"              # 0,1,2
-CLOUD_TOPIC="${CLOUD_TOPIC:-/cloud_stitched}"
+CLOUD_TOPIC="${CLOUD_TOPIC:-input_cloud}"
 SAMPLES_TOPIC="${SAMPLES_TOPIC:-}"         # if empty, we won't pass it
 RVIZ_TOPIC="${RVIZ_TOPIC:-plot_grasps}"
+NAMESPACE="${NAMESPACE:-gpd}"                 # NEW: namespace support
 
-# NEW: ASAN and restart options
+# ASAN and restart options
 USE_ASAN="${USE_ASAN:-false}"              # true/false
-AUTO_RESTART="${AUTO_RESTART:-false}"      # true/false  
+AUTO_RESTART="${AUTO_RESTART:-true}"      # true/false  
 MAX_RESTARTS="${MAX_RESTARTS:-10}"         # number
 RESTART_DELAY="${RESTART_DELAY:-3}"        # seconds between restarts
 
@@ -23,6 +24,7 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Options:
+    --namespace NS      Set namespace for the grasp detection node
     --use-asan          Enable ASAN workaround for GPD memory issues
     --auto-restart      Auto-restart node if it crashes
     --max-restarts N    Maximum restarts (default: 10)
@@ -32,27 +34,35 @@ Options:
     --help              Show this help
 
 Environment variables:
-    USE_ASAN, AUTO_RESTART, MAX_RESTARTS, RESTART_DELAY, 
+    NAMESPACE, USE_ASAN, AUTO_RESTART, MAX_RESTARTS, RESTART_DELAY, 
     CONFIG_FILE, CLOUD_TYPE, CLOUD_TOPIC, SAMPLES_TOPIC, RVIZ_TOPIC
 
 Examples:
     # Standard run
     $0
     
-    # With ASAN workaround
-    $0 --use-asan
+    # With namespace
+    $0 --namespace grasp_detection
     
-    # With auto-restart (up to 5 times)
-    $0 --auto-restart --max-restarts 5
+    # With ASAN workaround and namespace
+    $0 --use-asan --namespace left_arm_grasp
     
-    # Both ASAN and auto-restart
-    $0 --use-asan --auto-restart
+    # With auto-restart (up to 5 times) and namespace
+    $0 --auto-restart --max-restarts 5 --namespace right_arm_grasp
+    
+    # Multi-arm setup
+    $0 --namespace left_arm --cloud-topic /left_arm/cloud_stitched
+    $0 --namespace right_arm --cloud-topic /right_arm/cloud_stitched
 EOF
 }
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --namespace)
+            NAMESPACE="$2"
+            shift 2
+            ;;
         --use-asan)
             USE_ASAN="true"
             shift
@@ -89,7 +99,28 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Build direct ros2 run arguments (skip launch file for restart control)
+# Build launch arguments for launch file approach
+LAUNCH_ARGS=(
+    "config_file:=${CONFIG_FILE}"
+    "cloud_type:=${CLOUD_TYPE}"
+    "cloud_topic:=${CLOUD_TOPIC}"
+    "rviz_topic:=${RVIZ_TOPIC}"
+    "use_asan:=${USE_ASAN}"
+    "auto_restart:=${AUTO_RESTART}"
+    "max_restarts:=${MAX_RESTARTS}"
+)
+
+# Add namespace if provided
+if [[ -n "${NAMESPACE}" ]]; then
+    LAUNCH_ARGS+=("namespace:=${NAMESPACE}")
+fi
+
+# Add samples_topic only when non-empty
+if [[ -n "${SAMPLES_TOPIC}" ]]; then
+    LAUNCH_ARGS+=("samples_topic:=${SAMPLES_TOPIC}")
+fi
+
+# Build direct ros2 run arguments for restart control
 ROS_ARGS=(
     "--ros-args"
     "-p" "config_file:=${CONFIG_FILE}"
@@ -98,15 +129,24 @@ ROS_ARGS=(
     "-p" "rviz_topic:=${RVIZ_TOPIC}"
 )
 
+# Add namespace to ros2 run command if provided
+if [[ -n "${NAMESPACE}" ]]; then
+    ROS_ARGS+=("-r" "__ns:=/${NAMESPACE}")
+fi
+
 # Add samples_topic only when non-empty
 if [[ -n "${SAMPLES_TOPIC}" ]]; then
     ROS_ARGS+=("-p" "samples_topic:=${SAMPLES_TOPIC}")
 fi
 
-# Function to run the node once
+# Function to run the node once (for restart functionality)
 run_node() {
     local attempt=$1
     echo "===== Attempt $attempt: Starting GPD node ====="
+    
+    if [[ -n "${NAMESPACE}" ]]; then
+        echo "Using namespace: $NAMESPACE"
+    fi
     
     # Set ASAN environment if requested
     if [[ "${USE_ASAN}" == "true" ]]; then
@@ -132,6 +172,30 @@ cleanup() {
 
 # Set up signal handlers
 trap cleanup SIGINT SIGTERM
+
+# Show configuration
+echo "==============================================="
+echo "GPD GRASP DETECTION LAUNCH"
+echo "==============================================="
+echo "Config file: $CONFIG_FILE"
+echo "Cloud topic: $CLOUD_TOPIC"
+echo "Cloud type: $CLOUD_TYPE"
+if [[ -n "${NAMESPACE}" ]]; then
+    echo "Namespace: $NAMESPACE"
+else
+    echo "Namespace: (none)"
+fi
+if [[ -n "${SAMPLES_TOPIC}" ]]; then
+    echo "Samples topic: $SAMPLES_TOPIC"
+fi
+echo "RViz topic: $RVIZ_TOPIC"
+echo "ASAN workaround: $USE_ASAN"
+echo "Auto-restart: $AUTO_RESTART"
+if [[ "${AUTO_RESTART}" == "true" ]]; then
+    echo "Max restarts: $MAX_RESTARTS"
+    echo "Restart delay: ${RESTART_DELAY}s"
+fi
+echo "==============================================="
 
 # Main execution logic
 if [[ "${AUTO_RESTART}" == "true" ]]; then
@@ -175,9 +239,10 @@ if [[ "${AUTO_RESTART}" == "true" ]]; then
         fi
     done
 else
-    # Single run
-    echo "Single run mode (no auto-restart)"
-    run_node 1
+    # Use launch file for single run (cleaner parameter passing)
+    echo "Using launch file approach"
+    echo "Launch arguments: ${LAUNCH_ARGS[*]}"
+    ros2 launch your_package_name grasp_detection_with_namespace.launch.py "${LAUNCH_ARGS[@]}"
 fi
 
 echo "Script completed."

@@ -6,10 +6,17 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch.conditions import IfCondition, UnlessCondition
 
 def generate_launch_description():
+    # Namespace argument
+    namespace = DeclareLaunchArgument(
+        'namespace',
+        default_value='gpd',
+        description='Namespace for the grasp detection node'
+    )
+    
     # Existing arguments
     config_file = DeclareLaunchArgument(
         'config_file',
-        default_value='/home/socrob/Development/gpd/cfg/ros_eigen_params.cfg',
+        default_value='/home/socrob/grasp_ws/src/grasp_detection_ros2/gpd_ros2/config/ros_eigen_params.cfg',
         description='Path to GPD ros_*_params.cfg'
     )
     cloud_type = DeclareLaunchArgument(
@@ -17,7 +24,7 @@ def generate_launch_description():
         description='0: PointCloud2, 1: CloudIndexed, 2: CloudSamples'
     )
     cloud_topic = DeclareLaunchArgument(
-        'cloud_topic', default_value='/cloud_stitched',
+        'cloud_topic', default_value='input_cloud',
         description='Input cloud topic'
     )
     samples_topic = DeclareLaunchArgument(
@@ -29,7 +36,7 @@ def generate_launch_description():
         description='MarkerArray topic for RViz (empty disables plotting)'
     )
 
-    # NEW: ASAN and restart options
+    # ASAN and restart options
     use_asan = DeclareLaunchArgument(
         'use_asan', default_value='false',
         description='Enable ASAN workaround for GPD memory issues'
@@ -56,6 +63,7 @@ def generate_launch_description():
         package='gpd_ros2',
         executable='detect_grasps',
         name='detect_grasps',
+        namespace=LaunchConfiguration('namespace'),
         output='screen',
         parameters=[params],
         condition=UnlessCondition(LaunchConfiguration('use_asan'))
@@ -66,6 +74,7 @@ def generate_launch_description():
         package='gpd_ros2',
         executable='detect_grasps',
         name='detect_grasps',
+        namespace=LaunchConfiguration('namespace'),
         output='screen',
         parameters=[params],
         additional_env={
@@ -77,7 +86,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        config_file, cloud_type, cloud_topic, samples_topic, rviz_topic,
+        namespace, config_file, cloud_type, cloud_topic, samples_topic, rviz_topic,
         use_asan, auto_restart, max_restarts,
         standard_node,
         asan_node
