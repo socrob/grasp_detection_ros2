@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ---- Configuration (can be overridden by env vars) ----
-CONFIG_FILE="${CONFIG_FILE:-/home/socrob/grasp_ws/src/grasp_detection_ros2/gpd_ros2/config/ros_eigen_params.cfg}"
+CONFIG_FILE="${CONFIG_FILE:-/home/socrob/ros2_ws/src/grasp_detection_ros2/gpd_ros2/config/ros_eigen_params.cfg}"
 RVIZ_TOPIC="${RVIZ_TOPIC:-grasp_poses}"
 NAMESPACE="${NAMESPACE:-gpd}"
 

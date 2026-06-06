@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ---- Edit these if needed ----
-PCD_FILE="${PCD_FILE:-$HOME/grasp_ws/src/grasp_detection_ros2/tutorials/mug.pcd}"
+PCD_FILE="${PCD_FILE:-$HOME/ros2_ws/src/grasp_detection_ros2/tutorials/mug.pcd}"
 CLOUD_TOPIC="${CLOUD_TOPIC:-/gpd/input_cloud}"
 FRAME="${FRAME:-camera_link}"
 

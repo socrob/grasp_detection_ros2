@@ -17,7 +17,7 @@ def generate_launch_description():
     # Existing arguments
     config_file_arg = DeclareLaunchArgument(
         "config_file",
-        default_value="/home/socrob/grasp_ws/src/grasp_detection_ros2/gpd_ros2/config/ros_eigen_params.cfg",
+        default_value="/home/socrob/ros2_ws/src/grasp_detection_ros2/gpd_ros2/config/ros_eigen_params.cfg",
         description="Path to GPD config (*.cfg)",
     )
     rviz_topic_arg = DeclareLaunchArgument(

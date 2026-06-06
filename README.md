@@ -61,14 +61,14 @@ sudo apt install ros-humble-pcl-conversions ros-humble-pcl-msgs ros-humble-senso
 
 ```bash
 # Create workspace
-mkdir -p ~/grasp_ws/src
-cd ~/grasp_ws/src
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
 
 # Clone this repository
 git clone <repository-url> grasp_detection_ros2
 
 # Build the workspace
-cd ~/grasp_ws
+cd ~/ros2_ws
 colcon build --packages-select gpd_ros2_interfaces gpd_ros2 --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
 # Source the workspace
