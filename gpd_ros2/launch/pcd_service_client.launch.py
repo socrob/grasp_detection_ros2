@@ -7,7 +7,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description():
     # Declare launch-time args (so CLI/sh overrides work)
     args = [
-        DeclareLaunchArgument('pcd_file', default_value='/home/socrob/grasp_ws/src/grasp_detection_ros2/tutorials/mug.pcd'),
+        DeclareLaunchArgument('pcd_file', default_value='/home/socrob/ros2_ws/src/grasp_detection_ros2/tutorials/mug.pcd'),
         DeclareLaunchArgument('frame', default_value='camera_link'),
         DeclareLaunchArgument('service_name', default_value='/detect_grasps'),
 

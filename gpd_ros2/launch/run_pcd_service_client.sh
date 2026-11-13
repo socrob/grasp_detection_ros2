@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ---- Configuration (can be overridden by env vars) ----
-PCD_FILE="${PCD_FILE:-$HOME/grasp_ws/src/grasp_detection_ros2/tutorials/krylon.pcd}"
+PCD_FILE="${PCD_FILE:-$HOME/ros2_ws/src/grasp_detection_ros2/tutorials/krylon.pcd}"
 FRAME="${FRAME:-camera_link}"
 SERVICE_NAME="${SERVICE_NAME:-/gpd/detect_grasps}"
 REPEAT="${REPEAT:-false}"
@@ -118,7 +118,7 @@ if [[ ! -f "$PCD_FILE" ]]; then
     echo "Error: PCD file does not exist: $PCD_FILE"
     echo ""
     echo "Available tutorial files:"
-    find "$HOME/grasp_ws/src/grasp_detection_ros2/tutorials" -name "*.pcd" -o -name "*.ply" 2>/dev/null | head -5 || true
+    find "$HOME/ros2_ws/src/grasp_detection_ros2/tutorials" -name "*.pcd" -o -name "*.ply" 2>/dev/null | head -5 || true
     exit 1
 fi
 
